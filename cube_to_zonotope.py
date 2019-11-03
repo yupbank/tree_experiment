@@ -14,7 +14,7 @@ def generator_to_zonotope(generators):
 
 def get_zonotopes(all_points):
     hull = ConvexHull(all_points)
-    return hull.vertices
+    return all_points[hull.vertices]
 
 
 def num_vertices(m, n):
@@ -31,23 +31,18 @@ def bool_sign(a): return np.where(np.sign(a) > 0, 1.0, 0.0)
 
 def zonotope_vertices(generators, n_samples=50, n_batches=50):
     m, n = generators.shape
-    num_verts = num_vertices(m, n)
-    res = None
+    res = np.empty([0, m])
     for i in range(n_batches):
         samples = np.random.normal(size=(n_samples, n))
         S = np.sign(samples.dot(generators.T))
-        if res is None:
-            res = unique_rows(np.vstack((S, -S)))
-        else:
-            res = unique_rows(np.vstack((res, S, -S)))
-
+        res = unique_rows(np.vstack((res, S, -S)))
     S = bool_sign(res)
-
-    if num_verts > S.shape[0]:
-        print('Warning: {} of {} vertices found.'.format(
-            S.shape[0], num_verts))
-
     return S.dot(generators)
+
+    #num_verts = num_vertices(m, n)
+    #if num_verts > S.shape[0]:
+    #    print('Warning: {} of {} vertices found.'.format(
+    #        S.shape[0], num_verts))
 
 
 def deduplicate(x):
