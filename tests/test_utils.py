@@ -39,3 +39,19 @@ def test_fast_variance_the_same_with_variance(regression_input):
 
     np.testing.assert_allclose(
         f_res[0], f_res[1])
+
+
+def test_fast_skewness_the_same_with_skewness(regression_input):
+    data, index = regression_input
+    res = skewness_improvement(data, index)
+
+    d = _summary_vector(data)
+    p = _summary_vector(data[:index])
+
+    f_res = fast_skewness_improvements(np.array([p, p]), d)
+
+    np.testing.assert_allclose(
+        res, f_res[0])
+
+    np.testing.assert_allclose(
+        f_res[0], f_res[1])
