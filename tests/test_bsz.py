@@ -89,8 +89,6 @@ def test_bsz_default_classifier_similar_to_decision_tree(criteria, classificatio
     clf = DecisionTreeClassifier(max_depth=1, criterion=criteria).fit(x, y)
     tree_improvement = _tree_classifier_impurity(clf)
 
-    np.testing.assert_almost_equal(bsz_clf.res_["improvement"], tree_improvement)
-    assert bsz_clf.res_["feature"] == clf.tree_.feature[0]
-
-    np.testing.assert_equal(bsz_clf.predict_proba(x), clf.predict_proba(x))
+    np.testing.assert_almost_equal(bsz_clf.predict_proba(x), clf.predict_proba(x))
     np.testing.assert_almost_equal(bsz_clf.predict(x), clf.predict(x))
+    np.testing.assert_almost_equal(bsz_clf.res_["improvement"], tree_improvement)
