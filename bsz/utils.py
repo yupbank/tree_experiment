@@ -1,7 +1,6 @@
 from functools import partial
 
 import numpy as np
-from sklearn import preprocessing
 import scipy.stats as stats
 
 from bsz.cube_to_zonotope import sample_zonotope_vertices, aggregate_generators_by_direction
@@ -14,79 +13,75 @@ def bsplitz_method(gs):
     return ps, full_indices
 
 
-def numerical_split(feature_vector, threshold_vector, vectorizer):
-    encoded = np.vstack([feature_vector, np.ones_like(feature_vector)]).T
-    return encoded.dot(threshold_vector) >= 0
-
-
-def nominal_split(feature_vector, threshold_vector, vectorizer):
-    encoded = vectorizer.transform(feature_vector[:, np.newaxis])
-    return encoded.dot(threshold_vector) > 0
-
-
-def split_data(feature_vector, threshold_vector, vectorizer, feature_type):
-    if feature_type == 'numerical':
-        return numerical_split(feature_vector, threshold_vector, vectorizer)
-    elif feature_type == 'nominal':
-        return nominal_split(feature_vector, threshold_vector, vectorizer)
-
-
-def fast_gini_improvements(ps, d):
-    dp = ps.dot(d)[:, np.newaxis]
-    return (np.square((ps-dp)*d)/(dp*(1-dp))).sum(axis=1)
-
-
-def _convex_classification_improvements(measure, ps, d):
-    overall_measure = measure(d[np.newaxis, :])
-    dp = ps.dot(d)
-    left_ratios = ps*d*np.reciprocal(dp[:, np.newaxis])
-    left_measure = measure(left_ratios)
-    right_ratios = (1-ps)*d*np.reciprocal(1-dp[:, np.newaxis])
-    right_measure = measure(right_ratios)
-    return overall_measure - dp*left_measure - (1-dp)*right_measure
-
-
-def gini(ratios):
-    return 1 - (ratios**2).sum(axis=1)
-
-
-def entropy(ratios):
-    return - (ratios*np.log(ratios)).sum(axis=1)
-
-
-gini_improvements = partial(_convex_classification_improvements, gini)
-entropy_improvements = partial(_convex_classification_improvements, entropy)
-
-
 def fast_skewness_improvements(ps, d):
-    constant = 2*(d[0]/d[-1])**3 - 3*(d[0]/d[-1]*d[1]/d[-1])
-
-    a = np.vstack([ps[:, -1], d[-1]-ps[:, -1]]).T
+    constant = 2 * (d[0] / d[-1]) ** 3 - 3 * (d[0] / d[-1] * d[1] / d[-1])
+    a = np.vstack([ps[:, -1], d[-1] - ps[:, -1]]).T
     b = np.vstack([ps[:, 0], d[0] - ps[:, 0]]).T
     c = np.vstack([ps[:, 1], d[1] - ps[:, 1]]).T
-    e = 3*b/a*c/a - 2*(b/a)**3
-    return np.nan_to_num(constant + np.einsum('ij,ij->i', a, e)/d[-1])
+    e = 3 * b / a * c / a - 2 * (b / a) ** 3
+    return np.nan_to_num(constant + np.einsum('ij,ij->i', a, e) / d[-1])
 
 
 def fast_variance_improvements(ps, d):
-    constant = -(d[0]/d[-1])**2
-    a = np.vstack([ps[:, -1], d[-1]-ps[:, -1]]).T
+    N = d[-1]
+    constant = -(d[0] / N) ** 2
+    a = np.vstack([ps[:, -1], N - ps[:, -1]]).T
     b = np.vstack([ps[:, 0], d[0] - ps[:, 0]]).T
-    e = (b/a) ** 2
-    return np.nan_to_num(constant + np.einsum('ij,ij->i', a, e)/d[-1])
+    e = np.square(b / a)
+    return np.nan_to_num(constant + np.einsum('ij,ij->i', a, e) / N)
 
 
-def _summary_vector(y):
-  return np.array([y.sum(), (y**2).sum(), y.shape[0]])
+def fast_gini_improvements(ps, d):
+    N = d.sum()
+    qs = d - ps
+    constant = - np.square(d / N).sum()
+    a = np.vstack([ps.sum(axis=1), N - ps.sum(axis=1)]).T
+    e = np.vstack([np.square(ps / np.sum(ps, axis=1, keepdims=True)).sum(axis=1),
+                   np.square(qs / np.sum(qs, axis=1, keepdims=True)).sum(axis=1)]).T
+    return np.nan_to_num(constant + np.einsum('ij,ij->i', a, e) / N)
 
 
-def _regression_improvements(func, ys, index_l):
+_p_log_p = lambda r: r * np.log(r)
+
+
+def fast_entropy_improvements(ps, d):
+    N = d.sum()
+    qs = d - ps
+    constant = - (_p_log_p(d / N)).sum()
+    a = np.vstack([ps.sum(axis=1), N - ps.sum(axis=1)]).T
+    e = np.vstack([_p_log_p(ps / np.sum(ps, axis=1, keepdims=True)).sum(axis=1),
+                   _p_log_p(qs / np.sum(qs, axis=1, keepdims=True)).sum(axis=1)]).T
+    return np.nan_to_num(constant + np.einsum('ij,ij->i', a, e) / N)
+
+
+def _regression_summary_vector(y):
+    return np.array([y.sum(), (y ** 2).sum(), y.shape[0]])
+
+
+def _classification_summary_vector(y):
+    return y.sum(axis=0).ravel()
+
+
+def _improvements(func, ys, index_l):
     length = float(ys.shape[0])
     if index_l == 0 or index_l == length:
         return 0.0
-    return func(ys) - index_l/length*func(ys[:index_l]) - (1-index_l/length)*func(ys[index_l:])
+    return np.nan_to_num(func(ys) - index_l / length * func(ys[:index_l]) - (1 - index_l / length) * func(ys[index_l:]))
 
 
-variance_improvement = partial(_regression_improvements, np.var)
+def _gini(y):
+    d = _classification_summary_vector(y)
+    return 1 - np.square(d / np.sum(d, keepdims=True)).sum()
+
+
+def _entropy(y):
+    d = _classification_summary_vector(y)
+    p = d / np.sum(d, keepdims=True)
+    return - (_p_log_p(p)).sum()
+
+
+variance_improvement = partial(_improvements, np.var)
 skewness_improvement = partial(
-    _regression_improvements, lambda r: stats.moment(r, 3))
+    _improvements, lambda r: stats.moment(r, 3))
+gini_improvement = partial(_improvements, _gini)
+entropy_improvement = partial(_improvements, _entropy)
