@@ -63,7 +63,7 @@ class NumericalSplitter(NominalSplitter):
 
 
 def data_to_probs(y_high_d):
-    return np.nan_to_num(y_high_d.sum(0) / np.sum(y_high_d)).A.ravel()
+    return np.nan_to_num(y_high_d.sum(0) / np.sum(y_high_d)).ravel()
 
 
 class BsplitZClassifier(BaseEstimator, ClassifierMixin):
@@ -92,7 +92,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
         X, y = check_X_y(X, y)
 
-        one = preprocessing.OneHotEncoder()
+        one = preprocessing.OneHotEncoder(sparse=False)
         y_high_d = one.fit_transform(y[:, np.newaxis])
 
         if sample_weight is not None:

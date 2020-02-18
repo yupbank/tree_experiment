@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from sklearn.datasets import make_classification
 from sklearn import preprocessing
-from bsz.bsplitz import NumericalSplitter, NominalSplitter
+from bsz.bsplitz import NumericalSplitter, NominalSplitter, BsplitZClassifier
 from sklearn.tree import DecisionTreeClassifier
 
 
@@ -12,7 +12,7 @@ def classification_data():
 
 
 def _fit_decision_tree_classifier(x, y):
-    return DecisionTreeClassifier(max_depth=1).fit(x[:, np.newaxis], y)
+    return DecisionTreeClassifier(max_depth=1).fit(x, y)
 
 
 def _tree_classifier_impurity(clf):
@@ -29,7 +29,7 @@ def test_numerical_splitter_improvements(classification_data):
     col = 4
     orders = np.argsort(x[:, col])
     improvements = numerical_splitter.cal_improvements(orders, y_high_d)
-    clf = _fit_decision_tree_classifier(x[:, col], y)
+    clf = _fit_decision_tree_classifier(x[:, col][:, np.newaxis], y)
     tree_improvement = _tree_classifier_impurity(clf)
     np.testing.assert_almost_equal(np.max(improvements), tree_improvement)
 
@@ -40,7 +40,7 @@ def test_numerical_splitter_splits_correctly(classification_data):
     numerical_splitter = NumericalSplitter()
     col = 4
     numerical_splitter.find_best(x[:, col], y_high_d)
-    clf = _fit_decision_tree_classifier(x[:, col], y)
+    clf = _fit_decision_tree_classifier(x[:, col][:, np.newaxis], y)
 
     np.testing.assert_equal(
         x[:, col] <= clf.tree_.threshold[0], x[:, col] <= numerical_splitter.threshold
@@ -59,7 +59,7 @@ def test_nominal_splitter_improvements(classification_data):
     xi = x[:, col]
     c_xi = np.digitize(xi, np.histogram(xi, bins=10)[1])
     best_improvement = nominal_splitter.find_best(c_xi, y_high_d)
-    clf = _fit_decision_tree_classifier(c_xi, y)
+    clf = _fit_decision_tree_classifier(c_xi[:, np.newaxis], y)
     improvement_baseline = _tree_classifier_impurity(clf)
 
     assert best_improvement >= improvement_baseline
@@ -80,3 +80,17 @@ def test_nominal_splitter_splits_correctly(classification_data):
         <= 0,
         nominal_splitter.split(c_xi),
     )
+
+
+@pytest.mark.parametrize("criteria", ["entropy", "gini"])
+def test_bsz_default_classifier_similar_to_decision_tree(criteria, classification_data):
+    x, y = classification_data
+    bsz_clf = BsplitZClassifier(criteria=criteria).fit(x, y)
+    clf = DecisionTreeClassifier(max_depth=1, criterion=criteria).fit(x, y)
+    tree_improvement = _tree_classifier_impurity(clf)
+
+    np.testing.assert_almost_equal(bsz_clf.res_["improvement"], tree_improvement)
+    assert bsz_clf.res_["feature"] == clf.tree_.feature[0]
+
+    np.testing.assert_equal(bsz_clf.predict_proba(x), clf.predict_proba(x))
+    np.testing.assert_almost_equal(bsz_clf.predict(x), clf.predict(x))
