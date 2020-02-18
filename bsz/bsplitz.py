@@ -1,12 +1,16 @@
 import numpy as np
 from sklearn import preprocessing
-from bsz.utils import bsplitz_method, _classification_summary_vector, fast_gini_improvements, fast_entropy_improvements
+from bsz.utils import (
+    bsplitz_method,
+    _classification_summary_vector,
+    fast_gini_improvements,
+    fast_entropy_improvements,
+)
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_is_fitted, check_X_y
 import tqdm
 
-IMPROVEMENTS = {'gini': fast_gini_improvements,
-                'entropy': fast_entropy_improvements}
+IMPROVEMENTS = {"gini": fast_gini_improvements, "entropy": fast_entropy_improvements}
 
 
 class NominalSplitter(object):
@@ -67,7 +71,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
     BSplitZ Decision Stump classifier supports native nominal features
     """
 
-    def __init__(self, nominal_cols='', criteria='gini'):
+    def __init__(self, nominal_cols="", criteria="gini"):
         """
 
         :param nominal_cols: comma separated columns of nominal features, if not specified treat evey feature as numerical
@@ -78,11 +82,12 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         self.res_ = None
 
     def get_nominal_features(self):
-        return [int(i) for i in filter(
-            lambda r: r.strip(), self.nominal_cols.split(','))]
+        return [
+            int(i) for i in filter(lambda r: r.strip(), self.nominal_cols.split(","))
+        ]
 
     def fit(self, X, y, sample_weight=None):
-        self.res_ = {'improvement': -np.inf}
+        self.res_ = {"improvement": -np.inf}
         nominal_features = self.get_nominal_features()
 
         X, y = check_X_y(X, y)
@@ -103,33 +108,32 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
             else:
                 splitter = NumericalSplitter(IMPROVEMENTS[self.criteria])
 
-            improvement = splitter.find_best(
-                xi, weighted_y_high)
+            improvement = splitter.find_best(xi, weighted_y_high)
 
-            if improvement > self.res_['improvement']:
-                self.res_['improvement'] = improvement
-                self.res_['feature'] = i
-                self.res_['splitter'] = splitter
+            if improvement > self.res_["improvement"]:
+                self.res_["improvement"] = improvement
+                self.res_["feature"] = i
+                self.res_["splitter"] = splitter
 
-        mask = self.res_['splitter'].split(X[:, self.res_['feature']])
-        self.res_['classes'] = one.categories_[0]
-        self.res_['left_prob'] = data_to_probs(y_high_d[mask])
-        self.res_['right_prob'] = data_to_probs(y_high_d[~mask])
+        mask = self.res_["splitter"].split(X[:, self.res_["feature"]])
+        self.res_["classes"] = one.categories_[0]
+        self.res_["left_prob"] = data_to_probs(y_high_d[mask])
+        self.res_["right_prob"] = data_to_probs(y_high_d[~mask])
         return self
 
     def predict_proba(self, x):
-        check_is_fitted(self, ['res_', ])
-        mask = self.res_['splitter'].split(x[:, self.res_['feature']])
-        return np.array([self.res_['left_prob'], self.res_['right_prob']])[np.where(mask, 0, 1)]
+        check_is_fitted(self, ["res_"])
+        mask = self.res_["splitter"].split(x[:, self.res_["feature"]])
+        return np.array([self.res_["left_prob"], self.res_["right_prob"]])[
+            np.where(mask, 0, 1)
+        ]
 
     def predict(self, x):
         prob = self.predict_proba(x)
-        return self.res_['classes'][np.argmax(prob, axis=1)]
+        return self.res_["classes"][np.argmax(prob, axis=1)]
 
     def get_params(self, deep=True):
-        return {"nominal_cols": self.nominal_cols,
-                'criteria': self.criteria
-                }
+        return {"nominal_cols": self.nominal_cols, "criteria": self.criteria}
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():
@@ -137,7 +141,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         return self
 
 
-__version__ = 'x'
+__version__ = "x"
 
 if __name__ == "__main__":
     from sklearn.datasets import make_classification
@@ -146,12 +150,19 @@ if __name__ == "__main__":
     import openml
 
     dataset_meta_info = openml.datasets.get_dataset(1457, False)
-    nominal_cols = ','.join([str(key)
-                             for key, value in dataset_meta_info.features.items() if value.data_type == 'nominal'])
+    nominal_cols = ",".join(
+        [
+            str(key)
+            for key, value in dataset_meta_info.features.items()
+            if value.data_type == "nominal"
+        ]
+    )
     # clf = DecisionTreeClassifier(max_depth=1)
     clf = BsplitZClassifier(
-        nominal_method='bsplitz',
-        default_feature_type='nominal', non_default_feature_colmns=nominal_cols)
+        nominal_method="bsplitz",
+        default_feature_type="nominal",
+        non_default_feature_colmns=nominal_cols,
+    )
     task = openml.tasks.get_task(56571)
     run = openml.runs.run_model_on_task(clf, task, avoid_duplicate_runs=False)
 
