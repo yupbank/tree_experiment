@@ -1,14 +1,15 @@
 import numpy as np
+import tqdm
 from sklearn import preprocessing
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.utils.validation import check_is_fitted, check_X_y
+
 from bsz.utils import (
     bsplitz_method,
     _classification_summary_vector,
     fast_gini_improvements,
     fast_entropy_improvements,
 )
-from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.utils.validation import check_is_fitted, check_X_y
-import tqdm
 
 IMPROVEMENTS = {"gini": fast_gini_improvements, "entropy": fast_entropy_improvements}
 
@@ -20,18 +21,17 @@ class NominalSplitter(object):
         self.threshold = None
         self.improvement = None
 
-    def improvements(self, orders, y_high):
-        return
-
-    def find_best(self, xi, y_high):
+    def cal_improvements(self, xi, y_high):
         d = _classification_summary_vector(y_high)
-
         self.vec = preprocessing.OneHotEncoder()
         xi_high_d = self.vec.fit_transform(xi[:, np.newaxis])
-
         gs = xi_high_d.T.dot(y_high)
+
         pis, indices = bsplitz_method(gs)
-        improvements = np.nan_to_num(self.improvement_measure(pis, d))
+        return np.nan_to_num(self.improvement_measure(pis, d)), indices
+
+    def find_best(self, xi, y_high):
+        improvements, indices = self.cal_improvements(xi, y_high)
         best_index = np.argmax(improvements)
         self.improvement = improvements[best_index]
         self.threshold = indices[best_index]
@@ -44,14 +44,14 @@ class NominalSplitter(object):
 
 
 class NumericalSplitter(NominalSplitter):
-    def improvements(self, orders, y_high):
+    def cal_improvements(self, orders, y_high):
         d = y_high.sum(axis=0).ravel()
         pis = np.cumsum(y_high[orders], axis=0)
         return np.nan_to_num(self.improvement_measure(pis, d))
 
     def find_best(self, xi, weighted_y_high):
         orders = np.argsort(xi)
-        improvements = self.improvements(orders, weighted_y_high)
+        improvements = self.cal_improvements(orders, weighted_y_high)
         best_index = np.argmax(improvements)
         self.improvement = improvements[best_index]
         self.threshold = xi[orders[best_index]]
@@ -144,9 +144,6 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 __version__ = "x"
 
 if __name__ == "__main__":
-    from sklearn.datasets import make_classification
-    from sklearn.pipeline import Pipeline
-    from sklearn.tree import DecisionTreeClassifier
     import openml
 
     dataset_meta_info = openml.datasets.get_dataset(1457, False)

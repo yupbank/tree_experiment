@@ -7,10 +7,10 @@
 
 ## Classification in  ratio space
 
-- Multi-Class with nominal feature
+- Entropy/Gini impurity with nominal feature
 
 ## Regression in ratio space
 
-- L2 Loss.
+- Variance reduction.
 
-- GBDT
+- Skewness reduction.
