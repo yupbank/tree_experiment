@@ -51,7 +51,7 @@ def test_numerical_splitter_splits_correctly(classification_data):
     )
 
 
-def test_nominal_splitter_splits(classification_data):
+def test_nominal_splitter_improvements(classification_data):
     x, y = classification_data
     y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
     nominal_splitter = NominalSplitter()
