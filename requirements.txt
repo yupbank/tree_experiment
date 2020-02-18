@@ -3,3 +3,5 @@ category_encoders
 tqdm
 pytest-cov
 codecov
+black
+pre-commit
