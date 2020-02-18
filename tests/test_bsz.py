@@ -63,3 +63,20 @@ def test_nominal_splitter_improvements(classification_data):
     improvement_baseline = _tree_classifier_impurity(clf)
 
     assert best_improvement >= improvement_baseline
+
+
+def test_nominal_splitter_splits_correctly(classification_data):
+    x, y = classification_data
+    y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
+    nominal_splitter = NominalSplitter()
+    col = 4
+    xi = x[:, col]
+    c_xi = np.digitize(xi, np.histogram(xi, bins=10)[1])
+    nominal_splitter.find_best(c_xi, y_high_d)
+    np.testing.assert_equal(
+        nominal_splitter.vec.transform(c_xi[:, np.newaxis]).dot(
+            nominal_splitter.threshold
+        )
+        <= 0,
+        nominal_splitter.split(c_xi),
+    )
