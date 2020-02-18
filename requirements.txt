@@ -1,3 +1,5 @@
 pytest
 category_encoders
 tqdm
+pytest-cov
+codecov
