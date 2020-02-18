@@ -141,8 +141,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         return self
 
 
-__version__ = "x"
-
+"""
 if __name__ == "__main__":
     import openml
 
@@ -170,3 +169,4 @@ if __name__ == "__main__":
     # run = openml.runs.OpenMLRun.from_filesystem(directory='new_myrun')
     print(run)
     run.publish()
+"""
