@@ -114,7 +114,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
                 self.res_["improvement"] = improvement
                 self.res_["feature"] = i
                 self.res_["splitter"] = splitter
-
+        self.classes_ = one.categories_[0]
         mask = self.res_["splitter"].split(X[:, self.res_["feature"]])
         self.res_["classes"] = one.categories_[0]
         self.res_["left_prob"] = data_to_probs(y_high_d[mask])
