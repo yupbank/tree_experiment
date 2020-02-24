@@ -54,7 +54,7 @@ class NumericalSplitter(NominalSplitter):
         improvements = self.cal_improvements(orders, weighted_y_high)
         best_index = np.argmax(improvements)
         self.improvement = improvements[best_index]
-        self.threshold = xi[orders[best_index]]
+        self.threshold = xi[orders[best_index + 1]]
         return self.improvement
 
     def split(self, xi):
@@ -86,7 +86,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
             int(i) for i in filter(lambda r: r.strip(), self.nominal_cols.split(","))
         ]
 
-    def fit(self, X, y, sample_weight=None):
+    def fit(self, X, y, sample_weight=None, verbose=False):
         self.res_ = {"improvement": -np.inf}
         nominal_features = self.get_nominal_features()
 
@@ -100,7 +100,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         else:
             weighted_y_high = y_high_d
 
-        for i in tqdm.tqdm(range(X.shape[1])):
+        for i in tqdm.tqdm(range(X.shape[1]), disable=not verbose):
             xi = X[:, i]
 
             if i in nominal_features:
@@ -110,10 +110,11 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
             improvement = splitter.find_best(xi, weighted_y_high)
 
-            if improvement > self.res_["improvement"]:
+            if improvement >= self.res_["improvement"]:
                 self.res_["improvement"] = improvement
                 self.res_["feature"] = i
                 self.res_["splitter"] = splitter
+
         self.classes_ = one.categories_[0]
         mask = self.res_["splitter"].split(X[:, self.res_["feature"]])
         self.res_["classes"] = one.categories_[0]
