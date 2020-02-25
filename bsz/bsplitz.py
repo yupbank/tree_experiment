@@ -3,6 +3,7 @@ import tqdm
 from sklearn import preprocessing
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_is_fitted, check_X_y
+import pandas as pd
 
 from bsz.utils import (
     bsplitz_method,
@@ -71,7 +72,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
     BSplitZ Decision Stump classifier supports native nominal features
     """
 
-    def __init__(self, nominal_cols="", criteria="gini"):
+    def __init__(self, nominal_cols="", criteria="gini", verbose=False):
         """
 
         :param nominal_cols: comma separated columns of nominal features, if not specified treat evey feature as numerical
@@ -80,18 +81,21 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         self.nominal_cols = nominal_cols
         self.criteria = criteria
         self.res_ = None
+        self.verbose = verbose
 
     def get_nominal_features(self):
         return [
             int(i) for i in filter(lambda r: r.strip(), self.nominal_cols.split(","))
         ]
 
-    def fit(self, X, y, sample_weight=None, verbose=False):
+    def fit(self, X, y, sample_weight=None):
         self.res_ = {"improvement": -np.inf}
         nominal_features = self.get_nominal_features()
-
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        if isinstance(y, (pd.Series, pd.DataFrame)):
+            y = y.values
         X, y = check_X_y(X, y)
-
         one = preprocessing.OneHotEncoder(sparse=False)
         y_high_d = one.fit_transform(y[:, np.newaxis])
 
@@ -100,16 +104,13 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         else:
             weighted_y_high = y_high_d
 
-        for i in tqdm.tqdm(range(X.shape[1]), disable=not verbose):
+        for i in tqdm.tqdm(range(X.shape[1]), disable=not self.verbose):
             xi = X[:, i]
-
             if i in nominal_features:
                 splitter = NominalSplitter(IMPROVEMENTS[self.criteria])
             else:
                 splitter = NumericalSplitter(IMPROVEMENTS[self.criteria])
-
             improvement = splitter.find_best(xi, weighted_y_high)
-
             if improvement >= self.res_["improvement"]:
                 self.res_["improvement"] = improvement
                 self.res_["feature"] = i
