@@ -125,6 +125,8 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
     def predict_proba(self, x):
         check_is_fitted(self, ["res_"])
+        if isinstance(x, pd.DataFrame):
+            x = x.values
         mask = self.res_["splitter"].split(x[:, self.res_["feature"]])
         return np.array([self.res_["left_prob"], self.res_["right_prob"]])[
             np.where(mask, 0, 1)
