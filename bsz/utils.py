@@ -48,7 +48,7 @@ def fast_gini_improvements(ps, d):
     return np.nan_to_num(constant + np.einsum("ij,ij->i", a, e) / N)
 
 
-_p_log_p = lambda r: r * np.log2(r)
+_p_log_p = lambda r: np.log2(r ** r)
 
 
 def fast_entropy_improvements(ps, d):

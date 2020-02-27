@@ -106,7 +106,7 @@ def test_numerical_splitter_improvements():
     assert not np.all(improvements == 0)
 
 
-@pytest.mark.parametrize("criteria", ["gini"])
+@pytest.mark.parametrize("criteria", ["gini", "entropy"])
 def test_bsz_default_classifier_similar_to_decision_tree(criteria, classification_data):
     x, y = classification_data
     bsz_clf = BsplitZClassifier(criteria=criteria).fit(x, y)

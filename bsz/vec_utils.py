@@ -3,7 +3,7 @@ from functools import partial
 
 
 def r_log_r(r):
-    return r * np.log2(r)
+    return np.log2(r ** r)
 
 
 def homo_to_euclidean(vecs):
