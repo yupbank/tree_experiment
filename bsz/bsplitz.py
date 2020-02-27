@@ -64,6 +64,22 @@ class NumericalSplitter(NominalSplitter):
         return xi < self.threshold
 
 
+class VecNumericalSplitter(NominalSplitter):
+    def cal_improvements(self, orders, y_high):
+        d = y_high.sum(axis=0).ravel()
+        pis = np.cumsum(y_high[orders], axis=1)
+        return np.nan_to_num(self.improvement_measure(pis, d))
+
+    def find_best(self, x, y_high):
+        orders = np.argsort(x)
+        indices = x[orders]
+        improvements = self.cal_improvements(orders, y_high)
+        best_index = np.argmax(improvements)
+        self.improvement = improvements[best_index]
+        self.threshold = indices[best_index + 1]
+        return self.improvement
+
+
 def data_to_probs(y_high_d):
     return np.nan_to_num(y_high_d.sum(0) / np.sum(y_high_d)).ravel()
 
@@ -73,25 +89,19 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
     BSplitZ Decision Stump classifier supports native nominal features
     """
 
-    def __init__(self, nominal_cols="", criteria="gini", verbose=False):
+    def __init__(self, nominal_cols=None, criteria="gini", verbose=False):
         """
 
-        :param nominal_cols: comma separated columns of nominal features, if not specified treat evey feature as numerical
+        :param nominal_cols: list of columns that is nominal features, if not specified treat evey feature as numerical
         :param criteria: splitting criteria.
         """
-        self.nominal_cols = nominal_cols
+        self.nominal_features_ = nominal_cols or []
         self.criteria = criteria
         self.res_ = None
         self.verbose = verbose
 
-    def get_nominal_features(self):
-        return [
-            int(i) for i in filter(lambda r: r.strip(), self.nominal_cols.split(","))
-        ]
-
     def fit(self, X, y, sample_weight=None):
         self.improvement_ = -np.inf
-        nominal_features = self.get_nominal_features()
         if isinstance(X, pd.DataFrame):
             X = X.values
         if isinstance(y, (pd.Series, pd.DataFrame)):
@@ -107,7 +117,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
         for i in tqdm.tqdm(range(X.shape[1]), disable=not self.verbose):
             xi = X[:, i]
-            if i in nominal_features:
+            if i in self.nominal_features_:
                 splitter = NominalSplitter(IMPROVEMENTS[self.criteria])
             else:
                 splitter = NumericalSplitter(IMPROVEMENTS[self.criteria])

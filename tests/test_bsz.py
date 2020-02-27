@@ -6,23 +6,6 @@ from bsz.bsplitz import NumericalSplitter, NominalSplitter, BsplitZClassifier
 from sklearn.tree import DecisionTreeClassifier
 
 
-@pytest.fixture
-def classification_data():
-    return (
-        np.array(
-            [
-                [1.27218253, 0.5601962, 3.16651161, 0.31530069, -0.31402958],
-                [0.09277657, 0.70245147, -1.17064371, 1.5789989, -2.15371559],
-                [1.56782099, -0.78768125, 0.2858491, 1.01473497, 1.64521412],
-                [-0.95046474, -1.44892416, -1.9103314, -0.62311653, 0.30237404],
-                [-0.20403424, -1.80838061, 0.70055809, -1.56507989, -1.5060645],
-                [-1.22329363, 0.34663416, 0.6943241, -0.07918017, -0.39035781],
-            ]
-        ),
-        np.array([0, 0, 0, 1, 1, 0]),
-    )
-
-
 def _fit_decision_tree_classifier(x, y):
     return DecisionTreeClassifier(max_depth=1).fit(x, y)
 
@@ -35,8 +18,8 @@ def _tree_classifier_impurity(clf):
 
 
 def test_numerical_splitter_improvements(classification_data):
-    x, y = classification_data
-    y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
+    x, y, y_high_d = classification_data
+
     numerical_splitter = NumericalSplitter()
     col = 4
     orders = np.argsort(x[:, col])
@@ -47,8 +30,7 @@ def test_numerical_splitter_improvements(classification_data):
 
 
 def test_numerical_splitter_splits_correctly(classification_data):
-    x, y = classification_data
-    y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
+    x, y, y_high_d = classification_data
     numerical_splitter = NumericalSplitter()
     col = 4
     numerical_splitter.find_best(x[:, col], y_high_d)
@@ -64,8 +46,8 @@ def test_numerical_splitter_splits_correctly(classification_data):
 
 
 def test_nominal_splitter_improvements(classification_data):
-    x, y = classification_data
-    y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
+    x, y, y_high_d = classification_data
+
     nominal_splitter = NominalSplitter()
     col = 4
     xi = x[:, col]
@@ -78,8 +60,7 @@ def test_nominal_splitter_improvements(classification_data):
 
 
 def test_nominal_splitter_splits_correctly(classification_data):
-    x, y = classification_data
-    y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
+    x, y, y_high_d = classification_data
     nominal_splitter = NominalSplitter()
     col = 4
     xi = x[:, col]
@@ -108,10 +89,11 @@ def test_numerical_splitter_improvements():
 
 @pytest.mark.parametrize("criteria", ["gini", "entropy"])
 def test_bsz_default_classifier_similar_to_decision_tree(criteria, classification_data):
-    x, y = classification_data
+    x, y, _ = classification_data
     bsz_clf = BsplitZClassifier(criteria=criteria).fit(x, y)
     clf = DecisionTreeClassifier(max_depth=1, criterion=criteria).fit(x, y)
     tree_improvement = _tree_classifier_impurity(clf)
+
     np.testing.assert_almost_equal(bsz_clf.improvement_, tree_improvement)
 
     np.testing.assert_almost_equal(bsz_clf.predict(x), clf.predict(x))
