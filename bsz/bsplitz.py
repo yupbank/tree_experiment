@@ -50,17 +50,18 @@ class NumericalSplitter(NominalSplitter):
         pis = np.cumsum(y_high[orders], axis=0)
         return np.nan_to_num(self.improvement_measure(pis, d))
 
-    def find_best(self, xi, weighted_y_high):
+    def find_best(self, xi, y_high):
         orders = np.argsort(xi)
-        improvements = self.cal_improvements(orders, weighted_y_high)
+        indices = xi[orders]
+        improvements = self.cal_improvements(orders, y_high)
         best_index = np.argmax(improvements)
         self.improvement = improvements[best_index]
-        self.threshold = xi[orders[best_index + 1]]
+        self.threshold = indices[best_index + 1]
         return self.improvement
 
     def split(self, xi):
         assert self.threshold is not None, "can't split a no fitted splitter"
-        return xi <= self.threshold
+        return xi < self.threshold
 
 
 def data_to_probs(y_high_d):
@@ -89,7 +90,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         ]
 
     def fit(self, X, y, sample_weight=None):
-        self.res_ = {"improvement": -np.inf}
+        self.improvement_ = -np.inf
         nominal_features = self.get_nominal_features()
         if isinstance(X, pd.DataFrame):
             X = X.values
@@ -111,30 +112,31 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
             else:
                 splitter = NumericalSplitter(IMPROVEMENTS[self.criteria])
             improvement = splitter.find_best(xi, weighted_y_high)
-            if improvement >= self.res_["improvement"]:
-                self.res_["improvement"] = improvement
-                self.res_["feature"] = i
-                self.res_["splitter"] = splitter
+            if improvement >= self.improvement_:
+                self.improvement_ = improvement
+                self.best_feature_ = i
+                self.splitter_ = splitter
 
         self.classes_ = one.categories_[0]
-        mask = self.res_["splitter"].split(X[:, self.res_["feature"]])
-        self.res_["classes"] = one.categories_[0]
-        self.res_["left_prob"] = data_to_probs(y_high_d[mask])
-        self.res_["right_prob"] = data_to_probs(y_high_d[~mask])
+        mask = self.splitter_.split(X[:, self.best_feature_])
+        self.classes_ = one.categories_[0]
+        self.predictions_ = np.array(
+            [data_to_probs(y_high_d[mask]), data_to_probs(y_high_d[~mask])]
+        )
         return self
 
     def predict_proba(self, x):
-        check_is_fitted(self, ["res_"])
+        check_is_fitted(
+            self, ["best_feature_", "splitter_", "predictions_", "classes_"]
+        )
         if isinstance(x, pd.DataFrame):
             x = x.values
-        mask = self.res_["splitter"].split(x[:, self.res_["feature"]])
-        return np.array([self.res_["left_prob"], self.res_["right_prob"]])[
-            np.where(mask, 0, 1)
-        ]
+        mask = self.splitter_.split(x[:, self.best_feature_])
+        return self.predictions_[np.where(mask, 0, 1)]
 
     def predict(self, x):
         prob = self.predict_proba(x)
-        return self.res_["classes"][np.argmax(prob, axis=1)]
+        return self.classes_[np.argmax(prob, axis=1)]
 
     def get_params(self, deep=True):
         return {"nominal_cols": self.nominal_cols, "criteria": self.criteria}
