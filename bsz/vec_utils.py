@@ -23,10 +23,10 @@ def vec_entropy(vecs):
 
 def vec_variance(vecs):
     vecs = homo_to_euclidean(vecs)
-    return -np.square(vecs).sum(axis=1)
+    return -vecs[:, 0, :] ** 2
 
 
-def skewness_varaince(vecs):
+def vec_skewness(vecs):
     vecs = homo_to_euclidean(vecs)
     return 2 * vecs[:, 0, :] ** 3 - 3 * vecs[:, 0, :] * vecs[:, 1, :]
 
@@ -43,4 +43,4 @@ def _impurity(measure, ps, d):
 gini_impurity = partial(_impurity, vec_gini)
 entropy_impurity = partial(_impurity, vec_entropy)
 variance_impurity = partial(_impurity, vec_variance)
-skewness_impurity = partial(_impurity, skewness_varaince)
+skewness_impurity = partial(_impurity, vec_skewness)

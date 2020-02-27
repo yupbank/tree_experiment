@@ -33,8 +33,8 @@ def classification_target_split():
 def test_fast_variance_the_same_with_variance(regression_target_split):
     data, index = regression_target_split
 
-    d = _regression_summary_vector(data)[[0, 2]]
-    p = _regression_summary_vector(data[:index])[[0, 2]]
+    d = _regression_summary_vector(data)
+    p = _regression_summary_vector(data[:index])
 
     f_res = fast_variance_improvements(np.array([p, p]), d)
     v_res = vec_utils.variance_impurity(np.array([p, p]), d)
