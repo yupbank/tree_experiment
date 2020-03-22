@@ -24,7 +24,7 @@ class NominalSplitter(object):
 
     def cal_improvements(self, xi, y_high):
         d = _classification_summary_vector(y_high)
-        self.vec = preprocessing.OneHotEncoder()
+        self.vec = preprocessing.OneHotEncoder(handle_unknown="ignore")
         xi_high_d = self.vec.fit_transform(xi[:, np.newaxis])
         gs = xi_high_d.T.dot(y_high)
 
@@ -51,17 +51,39 @@ class NumericalSplitter(NominalSplitter):
         return np.nan_to_num(self.improvement_measure(pis, d))
 
     def find_best(self, xi, y_high):
+        unique, counts = np.unique(xi, return_counts=True)
+        valid_index = np.cumsum(counts) - 1
         orders = np.argsort(xi)
         indices = xi[orders]
         improvements = self.cal_improvements(orders, y_high)
-        best_index = np.argmax(improvements)
+        best_valid_index = np.argmax(improvements[valid_index])
+        best_index = valid_index[best_valid_index]
         self.improvement = improvements[best_index]
-        self.threshold = indices[best_index + 1]
+        self.threshold = indices[best_index]
         return self.improvement
 
     def split(self, xi):
         assert self.threshold is not None, "can't split a no fitted splitter"
-        return xi < self.threshold
+        return xi <= self.threshold
+
+
+class VecNumericalSplitter(NominalSplitter):
+    def cal_improvements(self, orders, y_high):
+        d = y_high.sum(axis=0).ravel()
+        d = np.hstack([d, d.sum(keepdims=True)])
+        pis = np.cumsum(y_high[orders], axis=0)
+        pis = np.concatenate([pis, pis.sum(axis=2, keepdims=True)], axis=2)
+        # import ipdb; ipdb.set_trace()
+        return np.nan_to_num(self.improvement_measure(pis, d))
+
+    def find_best(self, x, y_high):
+        orders = np.argsort(x)
+        indices = x[orders]
+        improvements = self.cal_improvements(orders, y_high)
+        best_index = np.argmax(improvements)
+        self.improvement = improvements[best_index]
+        self.threshold = indices[best_index]
+        return self.improvement
 
 
 def data_to_probs(y_high_d):
@@ -79,7 +101,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         :param nominal_cols: comma separated columns of nominal features, if not specified treat evey feature as numerical
         :param criteria: splitting criteria.
         """
-        self.nominal_cols = nominal_cols
+        self.nominal_cols_ = nominal_cols or []
         self.criteria = criteria
         self.res_ = None
         self.verbose = verbose
@@ -91,12 +113,11 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
     def fit(self, X, y, sample_weight=None):
         self.improvement_ = -np.inf
-        nominal_features = self.get_nominal_features()
         if isinstance(X, pd.DataFrame):
             X = X.values
         if isinstance(y, (pd.Series, pd.DataFrame)):
             y = y.values
-        X, y = check_X_y(X, y)
+        # X, y = check_X_y(X, y)
         one = preprocessing.OneHotEncoder(sparse=False)
         y_high_d = one.fit_transform(y[:, np.newaxis])
 
@@ -107,7 +128,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
         for i in tqdm.tqdm(range(X.shape[1]), disable=not self.verbose):
             xi = X[:, i]
-            if i in nominal_features:
+            if i in self.nominal_cols_:
                 splitter = NominalSplitter(IMPROVEMENTS[self.criteria])
             else:
                 splitter = NumericalSplitter(IMPROVEMENTS[self.criteria])
@@ -139,7 +160,7 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         return self.classes_[np.argmax(prob, axis=1)]
 
     def get_params(self, deep=True):
-        return {"nominal_cols": self.nominal_cols, "criteria": self.criteria}
+        return {"nominal_cols": self.nominal_cols_, "criteria": self.criteria}
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():
