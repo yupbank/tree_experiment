@@ -16,19 +16,30 @@ IMPROVEMENTS = {"gini": fast_gini_improvements, "entropy": fast_entropy_improvem
 
 
 class NominalSplitter(object):
-    def __init__(self, improvement_measure=fast_gini_improvements):
+    def __init__(
+        self,
+        improvement_measure=fast_gini_improvements,
+        random_state=None,
+        num_samples=5000,
+    ):
         self.improvement_measure = improvement_measure
         self.vec = None
         self.threshold = None
         self.improvement = None
+        self.random_state = random_state
+        self.num_samples = num_samples
 
     def cal_improvements(self, xi, y_high):
+        np.random.seed(self.random_state)
         d = _classification_summary_vector(y_high)
+        # self.vec = preprocessing.OneHotEncoder()
         self.vec = preprocessing.OneHotEncoder(handle_unknown="ignore")
         xi_high_d = self.vec.fit_transform(xi[:, np.newaxis])
         gs = xi_high_d.T.dot(y_high)
 
-        pis, indices = bsplitz_method(gs)
+        pis, indices = bsplitz_method(gs, self.num_samples)
+        # print('sampled pis', self.num_samples,
+        #      pis.shape, indices.shape, np.unique(xi).shape, xi.shape)
         return np.nan_to_num(self.improvement_measure(pis, d)), indices
 
     def find_best(self, xi, y_high):
@@ -95,16 +106,25 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
     BSplitZ Decision Stump classifier supports native nominal features
     """
 
-    def __init__(self, nominal_cols="", criteria="gini", verbose=False):
+    def __init__(
+        self,
+        nominal_cols=None,
+        criteria="gini",
+        verbose=False,
+        random_state=None,
+        num_samples=5000,
+    ):
         """
 
-        :param nominal_cols: comma separated columns of nominal features, if not specified treat evey feature as numerical
+        :param nominal_cols: list of cols that is nominal
         :param criteria: splitting criteria.
         """
         self.nominal_cols_ = nominal_cols or []
         self.criteria = criteria
         self.res_ = None
         self.verbose = verbose
+        self.random_state_ = random_state
+        self.num_samples = num_samples
 
     def get_nominal_features(self):
         return [
@@ -129,9 +149,15 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         for i in tqdm.tqdm(range(X.shape[1]), disable=not self.verbose):
             xi = X[:, i]
             if i in self.nominal_cols_:
-                splitter = NominalSplitter(IMPROVEMENTS[self.criteria])
+                splitter = NominalSplitter(
+                    IMPROVEMENTS[self.criteria],
+                    random_state=self.random_state_,
+                    num_samples=self.num_samples,
+                )
             else:
-                splitter = NumericalSplitter(IMPROVEMENTS[self.criteria])
+                splitter = NumericalSplitter(
+                    IMPROVEMENTS[self.criteria], random_state=self.random_state_
+                )
             improvement = splitter.find_best(xi, weighted_y_high)
             if improvement >= self.improvement_:
                 self.improvement_ = improvement
@@ -160,7 +186,11 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         return self.classes_[np.argmax(prob, axis=1)]
 
     def get_params(self, deep=True):
-        return {"nominal_cols": self.nominal_cols_, "criteria": self.criteria}
+        return {
+            "nominal_cols": self.nominal_cols_,
+            "criteria": self.criteria,
+            "random_state": self.random_state_,
+        }
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():
