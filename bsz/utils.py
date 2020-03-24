@@ -9,9 +9,9 @@ from bsz.cube_to_zonotope import (
 )
 
 
-def bsplitz_method(gs):
+def bsplitz_method(gs, num_samples=5000):
     processed_gs, inverse_index = aggregate_generators_by_direction(gs)
-    ps, indices = sample_zonotope_vertices(processed_gs, 5000, 1)
+    ps, indices = sample_zonotope_vertices(processed_gs, num_samples, 1)
     full_indices = indices[:, inverse_index]
     return ps, full_indices
 
@@ -48,7 +48,8 @@ def fast_gini_improvements(ps, d):
     return np.nan_to_num(constant + np.einsum("ij,ij->i", a, e) / N)
 
 
-_p_log_p = lambda r: np.log2(r ** r)
+def _p_log_p(r):
+    return np.log2(r ** r)
 
 
 def fast_entropy_improvements(ps, d):

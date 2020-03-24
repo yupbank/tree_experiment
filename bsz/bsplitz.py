@@ -16,19 +16,30 @@ IMPROVEMENTS = {"gini": fast_gini_improvements, "entropy": fast_entropy_improvem
 
 
 class NominalSplitter(object):
-    def __init__(self, improvement_measure=fast_gini_improvements):
+    def __init__(
+        self,
+        improvement_measure=fast_gini_improvements,
+        random_state=None,
+        num_samples=5000,
+    ):
         self.improvement_measure = improvement_measure
         self.vec = None
         self.threshold = None
         self.improvement = None
+        self.random_state = random_state
+        self.num_samples = num_samples
 
     def cal_improvements(self, xi, y_high):
+        np.random.seed(self.random_state)
         d = _classification_summary_vector(y_high)
-        self.vec = preprocessing.OneHotEncoder()
+        # self.vec = preprocessing.OneHotEncoder()
+        self.vec = preprocessing.OneHotEncoder(handle_unknown="ignore")
         xi_high_d = self.vec.fit_transform(xi[:, np.newaxis])
         gs = xi_high_d.T.dot(y_high)
 
-        pis, indices = bsplitz_method(gs)
+        pis, indices = bsplitz_method(gs, self.num_samples)
+        # print('sampled pis', self.num_samples,
+        #      pis.shape, indices.shape, np.unique(xi).shape, xi.shape)
         return np.nan_to_num(self.improvement_measure(pis, d)), indices
 
     def find_best(self, xi, y_high):
@@ -51,17 +62,39 @@ class NumericalSplitter(NominalSplitter):
         return np.nan_to_num(self.improvement_measure(pis, d))
 
     def find_best(self, xi, y_high):
+        unique, counts = np.unique(xi, return_counts=True)
+        valid_index = np.cumsum(counts) - 1
         orders = np.argsort(xi)
         indices = xi[orders]
         improvements = self.cal_improvements(orders, y_high)
-        best_index = np.argmax(improvements)
+        best_valid_index = np.argmax(improvements[valid_index])
+        best_index = valid_index[best_valid_index]
         self.improvement = improvements[best_index]
-        self.threshold = indices[best_index + 1]
+        self.threshold = indices[best_index]
         return self.improvement
 
     def split(self, xi):
         assert self.threshold is not None, "can't split a no fitted splitter"
-        return xi < self.threshold
+        return xi <= self.threshold
+
+
+class VecNumericalSplitter(NominalSplitter):
+    def cal_improvements(self, orders, y_high):
+        d = y_high.sum(axis=0).ravel()
+        d = np.hstack([d, d.sum(keepdims=True)])
+        pis = np.cumsum(y_high[orders], axis=0)
+        pis = np.concatenate([pis, pis.sum(axis=2, keepdims=True)], axis=2)
+        # import ipdb; ipdb.set_trace()
+        return np.nan_to_num(self.improvement_measure(pis, d))
+
+    def find_best(self, x, y_high):
+        orders = np.argsort(x)
+        indices = x[orders]
+        improvements = self.cal_improvements(orders, y_high)
+        best_index = np.argmax(improvements)
+        self.improvement = improvements[best_index]
+        self.threshold = indices[best_index]
+        return self.improvement
 
 
 def data_to_probs(y_high_d):
@@ -73,16 +106,25 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
     BSplitZ Decision Stump classifier supports native nominal features
     """
 
-    def __init__(self, nominal_cols="", criteria="gini", verbose=False):
+    def __init__(
+        self,
+        nominal_cols=None,
+        criteria="gini",
+        verbose=False,
+        random_state=None,
+        num_samples=5000,
+    ):
         """
 
-        :param nominal_cols: comma separated columns of nominal features, if not specified treat evey feature as numerical
+        :param nominal_cols: list of cols that is nominal
         :param criteria: splitting criteria.
         """
-        self.nominal_cols = nominal_cols
+        self.nominal_cols_ = nominal_cols or []
         self.criteria = criteria
         self.res_ = None
         self.verbose = verbose
+        self.random_state_ = random_state
+        self.num_samples = num_samples
 
     def get_nominal_features(self):
         return [
@@ -91,12 +133,11 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
     def fit(self, X, y, sample_weight=None):
         self.improvement_ = -np.inf
-        nominal_features = self.get_nominal_features()
         if isinstance(X, pd.DataFrame):
             X = X.values
         if isinstance(y, (pd.Series, pd.DataFrame)):
             y = y.values
-        X, y = check_X_y(X, y)
+        # X, y = check_X_y(X, y)
         one = preprocessing.OneHotEncoder(sparse=False)
         y_high_d = one.fit_transform(y[:, np.newaxis])
 
@@ -107,10 +148,16 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
 
         for i in tqdm.tqdm(range(X.shape[1]), disable=not self.verbose):
             xi = X[:, i]
-            if i in nominal_features:
-                splitter = NominalSplitter(IMPROVEMENTS[self.criteria])
+            if i in self.nominal_cols_:
+                splitter = NominalSplitter(
+                    IMPROVEMENTS[self.criteria],
+                    random_state=self.random_state_,
+                    num_samples=self.num_samples,
+                )
             else:
-                splitter = NumericalSplitter(IMPROVEMENTS[self.criteria])
+                splitter = NumericalSplitter(
+                    IMPROVEMENTS[self.criteria], random_state=self.random_state_
+                )
             improvement = splitter.find_best(xi, weighted_y_high)
             if improvement >= self.improvement_:
                 self.improvement_ = improvement
@@ -139,7 +186,11 @@ class BsplitZClassifier(BaseEstimator, ClassifierMixin):
         return self.classes_[np.argmax(prob, axis=1)]
 
     def get_params(self, deep=True):
-        return {"nominal_cols": self.nominal_cols, "criteria": self.criteria}
+        return {
+            "nominal_cols": self.nominal_cols_,
+            "criteria": self.criteria,
+            "random_state": self.random_state_,
+        }
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():

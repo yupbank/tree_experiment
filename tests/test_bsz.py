@@ -2,8 +2,14 @@ import pytest
 import numpy as np
 from sklearn.datasets import make_classification
 from sklearn import preprocessing
-from bsz.bsplitz import NumericalSplitter, NominalSplitter, BsplitZClassifier
+from bsz.bsplitz import (
+    NumericalSplitter,
+    NominalSplitter,
+    BsplitZClassifier,
+    VecNumericalSplitter,
+)
 from sklearn.tree import DecisionTreeClassifier
+from bsz import vec_utils
 
 
 @pytest.fixture
@@ -46,6 +52,18 @@ def test_numerical_splitter_improvements(classification_data):
     np.testing.assert_almost_equal(np.max(improvements), tree_improvement)
 
 
+def test_vec_numerical_splitter_improvemtns(classification_data):
+    x, y = classification_data
+    y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
+    splitter = VecNumericalSplitter(vec_utils.mat_gini_impurity)
+    numerical_splitter = NumericalSplitter()
+    col = 4
+    orders = np.argsort(x, axis=0)
+    improvements = numerical_splitter.cal_improvements(orders[:, col], y_high_d)
+    massive_improvements = splitter.cal_improvements(orders, y_high_d)
+    np.testing.assert_almost_equal(improvements, massive_improvements[:, col])
+
+
 def test_numerical_splitter_splits_correctly(classification_data):
     x, y = classification_data
     y_high_d = preprocessing.OneHotEncoder(sparse=False).fit_transform(y[:, np.newaxis])
@@ -53,9 +71,8 @@ def test_numerical_splitter_splits_correctly(classification_data):
     col = 4
     numerical_splitter.find_best(x[:, col], y_high_d)
     clf = _fit_decision_tree_classifier(x[:, col][:, np.newaxis], y)
-
     np.testing.assert_equal(
-        x[:, col] < clf.tree_.threshold[0], x[:, col] < numerical_splitter.threshold
+        x[:, col] < clf.tree_.threshold[0], x[:, col] <= numerical_splitter.threshold
     )
 
     np.testing.assert_equal(
