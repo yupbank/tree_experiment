@@ -34,7 +34,7 @@ def fast_variance_improvements(ps, d):
     return np.nan_to_num(constant + np.einsum("ij,ij->i", a, e) / N)
 
 
-def fast_gini_improvements(ps, d):
+def fast_gini_improvements(ps, d, uniques=None):
     N = d.sum()
     qs = d - ps
     constant = -np.square(d / N).sum()
@@ -52,7 +52,7 @@ def _p_log_p(r):
     return np.log2(r ** r)
 
 
-def fast_entropy_improvements(ps, d):
+def fast_entropy_improvements(ps, d, uniques=None):
     N = d.sum()
     qs = d - ps
     constant = -(_p_log_p(d / N)).sum()
@@ -94,6 +94,27 @@ def _entropy(y):
     d = _classification_summary_vector(y)
     p = d / np.sum(d, keepdims=True)
     return -(_p_log_p(p)).sum()
+
+
+def _absolute_error(y):
+    return np.mean(np.abs(y - np.median(y)))
+
+
+def mae(pis, y_uniques):
+    medians = np.array(
+        [np.median(np.repeat(y_uniques, p)) for p in np.array(pis, dtype=np.int32)]
+    )
+    return np.nan_to_num(
+        np.einsum("ij,ij->i", np.abs(medians[:, np.newaxis] - y_uniques), pis)
+    )
+
+
+def mae_improvement(pis, d, y_uniques):
+    qis = d - pis
+    old_medians = mae([d], y_uniques)[0]
+    left_medians = mae(pis, y_uniques)
+    right_medians = mae(qis, y_uniques)
+    return old_medians - right_medians - left_medians
 
 
 variance_improvement = partial(_improvements, np.var)

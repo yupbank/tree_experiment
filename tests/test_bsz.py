@@ -7,6 +7,7 @@ from bsz.bsplitz import (
     NominalSplitter,
     BsplitZClassifier,
     VecNumericalSplitter,
+    mae_improvement,
 )
 from sklearn.tree import DecisionTreeClassifier
 from bsz import vec_utils
@@ -136,3 +137,68 @@ def test_bsz_default_classifier_similar_to_decision_tree(criteria, classificatio
     np.testing.assert_almost_equal(
         bsz_clf.predict_proba(x), clf.predict_proba(x), decimal=1
     )
+
+
+def test_numerical_median_splitter():
+    y = np.array(
+        [
+            2.80000e-02,
+            8.04000e-01,
+            4.00000e-03,
+            3.60000e03,
+            3.60000e03,
+            5.72000e-01,
+            3.60000e03,
+            1.28756e02,
+            3.60000e03,
+            1.90850e01,
+        ]
+    )
+    x = np.array(
+        [
+            -1.54042965,
+            -0.93462145,
+            -0.53668933,
+            -0.13294344,
+            0.17720193,
+            0.45695202,
+            -0.80966124,
+            -0.01791948,
+            0.70969338,
+            -0.69261156,
+        ]
+    )
+    orders = np.array([0, 1, 6, 9, 2, 3, 7, 4, 5, 8])
+    y_uniques = np.array(
+        [
+            4.00000e-03,
+            2.80000e-02,
+            5.72000e-01,
+            8.04000e-01,
+            1.90850e01,
+            1.28756e02,
+            3.60000e03,
+        ]
+    )
+    y_high = np.array(
+        [
+            [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        ]
+    )
+    nms = NumericalSplitter(mae_improvement)
+    actual = nms.find_best(x, y_high, y_uniques)
+    from sklearn.tree import DecisionTreeRegressor
+
+    clf = DecisionTreeRegressor(criterion="mae", max_depth=1)
+    clf.fit(x[:, np.newaxis], y)
+    expected = np.dot(clf.tree_.impurity * clf.tree_.n_node_samples, [1, -1, -1])
+    np.testing.assert_almost_equal(actual, expected)

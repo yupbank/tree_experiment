@@ -1,5 +1,6 @@
 import numpy as np
 from functools import partial
+import robustats as rs
 
 
 def r_log_r(r):
@@ -41,6 +42,13 @@ def vec_variance(vecs):
     return -vecs[:, 0, :] ** 2
 
 
+def vec_mae(unique, vecs):
+    vecs = homogeneous_to_cartesian(vecs)
+    medians = np.apply_along_axis(lambda w: rs.weighted_median(unique, w), 1, vecs)
+    diffs = np.abs(medians[:, np.newaxis, :] - unique[np.newaxis, :, np.newaxis])
+    return np.einsum("ijk,ijk->ik", diffs, vecs)
+
+
 def mat_variance(mat):
     mat = matrix_homogeneous_to_cartesian(mat)
     return -mat[:, :, 0, :] ** 2
@@ -80,6 +88,11 @@ gini_impurity = partial(_vec_impurity, vec_gini)
 entropy_impurity = partial(_vec_impurity, vec_entropy)
 variance_impurity = partial(_vec_impurity, vec_variance)
 skewness_impurity = partial(_vec_impurity, vec_skewness)
+
+
+def mae_impurity(ps, d, unique):
+    return partial(_vec_impurity, partial(vec_mae, unique))
+
 
 mat_gini_impurity = partial(_mat_impurity, mat_gini)
 mat_entropy_impurity = partial(_mat_impurity, mat_entropy)

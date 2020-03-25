@@ -1,6 +1,7 @@
 scipy
 numpy
 scikit-learn
+robustats
 pytest
 category_encoders
 tqdm
